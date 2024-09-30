@@ -1,0 +1,36 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace baitapvenhabuoi4
+{
+    public partial class Form2 : Form
+    {
+        public Form2(string imageFile)
+        {
+            InitializeComponent();
+
+            // Kiểm tra nếu file ảnh tồn tại
+            if (System.IO.File.Exists(imageFile))
+            {
+                // Gán ảnh vào PictureBox
+                pictureBox1.Image = Image.FromFile(imageFile);
+                pictureBox1.SizeMode = PictureBoxSizeMode.Zoom; // Điều chỉnh ảnh theo kích thước của PictureBox
+
+                // Hiển thị tên file trên tiêu đề Form
+                Text = System.IO.Path.GetFileName(imageFile);
+            } 
+        }
+
+        private void Form2_Load(object sender, EventArgs e)
+        {
+            // Bạn có thể thêm bất kỳ logic nào cần thiết ở đây nếu cần thiết
+        }
+    }
+}
