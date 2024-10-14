@@ -1,0 +1,259 @@
+using BUS;
+using DAL.model;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace lap1
+{
+    public partial class frmGui : Form
+    {
+        private readonly StudentService studentService = new StudentService();
+        private readonly Facultyservice facultyService = new Facultyservice();
+        public frmGui()
+        {
+            InitializeComponent();
+        }
+
+        private void GUI_Load(object sender, EventArgs e)
+        {
+            try
+            {
+                setGridViewStyle(dgvStudent);
+                var listFacultys = facultyService.GetAll();
+                var listStudents = studentService.GetAll();
+                FillFacultyComboBox(listFacultys);
+                BindGrid(listStudents);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+
+        private void FillFacultyComboBox(List<Faculty> listFaculty)
+        {
+            listFaculty.Insert(0, new Faculty());
+            this.cmbKhoa.DataSource = listFaculty;
+            this.cmbKhoa.DisplayMember = "FacultyName";
+            this.cmbKhoa.ValueMember = "FacultyID";
+        }
+
+        // Hàm binding gridView từ list sinh viên
+        private void BindGrid(List<Student> listStudent)
+        {
+            dgvStudent.Rows.Clear();
+            foreach (var item in listStudent)
+            {
+                int index = dgvStudent.Rows.Add();
+                dgvStudent.Rows[index].Cells[0].Value = item.StudentID;
+                dgvStudent.Rows[index].Cells[1].Value = item.FullName;
+                if (item.Faculty != null)
+                    dgvStudent.Rows[index].Cells[2].Value = item.Faculty.FacultyName;
+                dgvStudent.Rows[index].Cells[3].Value = item.AverageScore + "";
+                if (item.Major != null)
+                    dgvStudent.Rows[index].Cells[4].Value = item.Major.Name + "";
+                ShowAvatar(item.Avatar);
+            }
+        }
+
+        private void ShowAvatar(string ImageName)
+        {
+            if (string.IsNullOrEmpty(ImageName))
+            {
+                picAvatar.Image = null;
+            }
+            else
+            {
+                string parentDirectory = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).Parent.Parent.FullName;
+                string imagePath = Path.Combine(parentDirectory, "Images", ImageName);
+                picAvatar.Image = Image.FromFile(imagePath);
+                picAvatar.Refresh();
+            }
+        }
+
+        public void setGridViewStyle(DataGridView dgview)
+        {
+            dgview.BorderStyle = BorderStyle.None;
+            dgview.DefaultCellStyle.SelectionBackColor = Color.DarkTurquoise;
+            dgview.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            dgview.BackgroundColor = Color.White;
+            dgview.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        }
+
+        private string avatarFilePath = string.Empty;
+
+        private void btnAddUp_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!ValidateInputs()) return;
+
+                var student = studentService.FindById(txtMssv.Text) ?? new Student();
+
+                student.StudentID = txtMssv.Text.Trim();
+                student.FullName = txtName.Text.Trim();
+
+                if (!double.TryParse(txtDiem.Text.Trim(), out double averageScore))
+                {
+                    MessageBox.Show("Invalid score format!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                student.AverageScore = averageScore;
+
+                if (!int.TryParse(cmbKhoa.SelectedValue.ToString(), out int facultyID))
+                {
+                    MessageBox.Show("Invalid Faculty ID!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                student.FacultyID = facultyID;
+
+                if (!string.IsNullOrEmpty(avatarFilePath))
+                {
+                    string avatarFileName = SaveAvatar(avatarFilePath, txtMssv.Text);
+                    if (!string.IsNullOrEmpty(avatarFileName))
+                    {
+                        student.Avatar = avatarFileName;
+                    }
+                    else
+                    {
+                        MessageBox.Show("Error saving avatar.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+
+                studentService.InsertUpdate(student);
+                BindGrid(studentService.GetAll());
+                ClearFormFields();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error adding student: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool ValidateInputs()
+        {
+            if (string.IsNullOrWhiteSpace(txtMssv.Text))
+            {
+                MessageBox.Show("Student ID is required!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtName.Text))
+            {
+                MessageBox.Show("Student name is required!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtDiem.Text))
+            {
+                MessageBox.Show("Average score is required!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            return true;
+        }
+
+        private void ClearFormFields()
+        {
+            txtMssv.Clear();
+            txtName.Clear();
+            txtDiem.Clear();
+            avatarFilePath = string.Empty;
+        }
+
+        private void LoadAvatar(string studentID)
+        {
+            string folderPath = Path.Combine(Application.StartupPath, "Images");
+            var student = studentService.FindById(studentID);
+            if (student == null && !string.IsNullOrEmpty(student.Avatar))
+            {
+                string avatarFilePath = Path.Combine(folderPath, student.Avatar);
+                if (File.Exists(avatarFilePath))
+                {
+                    picAvatar.Image = Image.FromFile(avatarFilePath);
+                }
+                else
+                {
+                    picAvatar.Image = null;
+                }
+            }
+        }
+
+        private string SaveAvatar(string sourceFilePath, string studentID)
+        {
+            try
+            {
+                string folderPath = Path.Combine(Application.StartupPath, "images");
+                if (Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+                string fileExtension = Path.GetExtension(sourceFilePath);
+                string targetFilePath = Path.Combine(folderPath, $"{studentID}{fileExtension}");
+                if (File.Exists(targetFilePath)) {
+                    throw new FileNotFoundException($"khong tim thay file: {sourceFilePath}");
+                }
+                File.Copy(sourceFilePath, targetFilePath, true);
+                return $"{studentID}{fileExtension}";
+            }
+            catch (Exception ex) {
+                MessageBox.Show($"error saving avatar :{ex.Message}", "error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            } 
+        }
+
+        private void btnUpLoad_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Filter = " image files (*.jpg; *jpeg; *.png)|*.jpg; *jpeg; *.png";
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    avatarFilePath = ofd.FileName;
+                    picAvatar.Image = Image.FromFile(avatarFilePath);
+                }
+
+            }
+
+        }
+
+        private void btnXoa_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (dgvStudent.SelectedRows.Count == 0)
+                {
+                    MessageBox.Show("Please select a student to delete.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var selectedRow = dgvStudent.SelectedRows[0];
+                string studentID = selectedRow.Cells[0].Value.ToString();
+
+
+                var result = MessageBox.Show($"Are you sure you want to delete student with ID: {studentID}?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.Yes)
+                {
+
+                    studentService.Delete(studentID);
+
+
+                    BindGrid(studentService.GetAll());
+
+                    MessageBox.Show("Student deleted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error deleting student: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}
+
